@@ -4,6 +4,7 @@ import json
 import os
 import platform
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -20,6 +21,8 @@ DEFAULT_BROWSER_ARGS = [
     "--profile-directory=Default",
     "--disable-gpu",
 ]
+
+MANUAL_SESSION_AUTOSAVE_INTERVAL = 2
 
 
 def configure_console():
@@ -170,6 +173,14 @@ def save_storage_state(context, state_path: Path, engine: str):
         print(f"[{engine}] ✓ Đã lưu storage_state: {state_path}")
     except Exception as exc:
         print(f"[{engine}] ✗ Lưu storage_state thất bại: {exc}")
+
+
+def save_storage_state_quietly(context, state_path: Path):
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        context.storage_state(path=str(state_path))
+    except Exception:
+        pass
 
 
 def add_stealth_script(context):
@@ -327,6 +338,42 @@ def finalize_worker_run(engine: str, temp_dir: Path, temp_prefix: str, timestamp
     return temp_file
 
 
+def wait_for_manual_browser_close(opened_contexts, intro_lines=None):
+    active = {
+        item["key"]: {
+            "label": item["label"],
+            "context": item["context"],
+            "state_path": item["state_path"],
+            "last_save": 0.0,
+        }
+        for item in opened_contexts
+    }
+
+    if intro_lines:
+        for line in intro_lines:
+            print(line)
+
+    while active:
+        now = time.time()
+        closed_keys = []
+
+        for key, item in active.items():
+            context = item["context"]
+            try:
+                _ = context.pages
+                if now - item["last_save"] >= MANUAL_SESSION_AUTOSAVE_INTERVAL:
+                    save_storage_state_quietly(context, item["state_path"])
+                    item["last_save"] = now
+            except Exception:
+                closed_keys.append(key)
+
+        for key in closed_keys:
+            active.pop(key, None)
+
+        if active:
+            time.sleep(1)
+
+
 def interactive_profile_setup(playwright, engine: str, profile_dir: Path, storage_state_path: Path, start_url: str, timeout: int = 30000):
     ensure_dirs(profile_dir, storage_state_path.parent)
     context = launch_persistent_context(
@@ -342,6 +389,20 @@ def interactive_profile_setup(playwright, engine: str, profile_dir: Path, storag
     page.bring_to_front()
     print(f"[{engine}] Đã mở trang setup: {start_url}")
     print(f"[{engine}] Hãy đăng nhập/tắt popup cần thiết trong cửa sổ browser này.")
-    input(f"[{engine}] Nhấn Enter sau khi hoàn tất đăng nhập để lưu session... ")
-    save_storage_state(context, storage_state_path, engine)
-    context.close()
+    print(f"[{engine}] Không cần nhấn Enter trong terminal.")
+    print(f"[{engine}] Khi đăng nhập xong, chờ 2-3 giây rồi tự đóng cửa sổ browser này.")
+    wait_for_manual_browser_close(
+        [
+            {
+                "key": engine.lower(),
+                "label": engine,
+                "context": context,
+                "state_path": storage_state_path,
+            }
+        ],
+        intro_lines=[
+            f"[{engine}] Script sẽ giữ browser mở cho tới khi user tự đóng.",
+            f"[{engine}] Session sẽ được autosave định kỳ trong lúc browser đang mở.",
+        ],
+    )
+    print(f"[{engine}] ✓ Hoàn tất setup profile.")

@@ -65,6 +65,14 @@ python manager.py --setup 1
 python3 manager.py --setup 1
 ```
 
+Quy tắc setup lần đầu:
+- `manager.py --setup 1` sẽ mở cả 4 browser/profile cùng lúc, không mở tuần tự
+- mỗi cửa sổ sẽ vào thẳng đúng website tương ứng để user dễ phân biệt
+- không cần nhấn Enter trong terminal
+- script không tự đóng browser ở chế độ setup
+- user đăng nhập xong ở cửa sổ nào thì chờ 2-3 giây rồi tự đóng cửa sổ đó
+- khi cả 4 cửa sổ đã đóng hết thì setup mới xem như hoàn tất
+
 ## Soạn Câu Hỏi Trước Khi Chạy
 
 Agent không được đẩy nguyên câu hỏi ngắn, mơ hồ, hoặc thiếu ngữ cảnh của user vào web AI nếu trong cuộc trò chuyện hiện tại đã có thêm bối cảnh.
@@ -155,8 +163,9 @@ Nếu worker fail sau khi chạy:
 2. xác định worker nào lỗi
 3. mở profile đúng worker đó
 4. để user đăng nhập lại hoặc vượt captcha
-5. khi sửa xong, user đóng cửa sổ browser đó
-6. chạy lại `manager.py`
+5. `fix-error.py` chỉ có nhiệm vụ mở đúng browser/profile rồi tự kết thúc lệnh
+6. khi sửa xong, user tự đóng cửa sổ browser đó
+7. chạy lại `manager.py`
 
 Lệnh nhanh từng worker:
 
@@ -196,8 +205,9 @@ python3 fix-error.py
 
 Lưu ý:
 - `fix-error.py chatgpt|gemini|deepseek|qwen|all` không cần nhập thêm trong terminal
-- script sẽ autosave session định kỳ
-- user chỉ cần đóng browser khi sửa xong
+- `fix-error.py` chỉ là launcher, mở xong browser/profile là lệnh kết thúc ngay
+- browser vẫn giữ mở để user tự đăng nhập hoặc vượt captcha
+- user chỉ cần tự đóng browser khi sửa xong
 
 ## Worker Common Làm Gì
 

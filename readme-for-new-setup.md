@@ -178,14 +178,15 @@ python3 manager.py --setup 1
 ```
 
 Quy trình setup:
-1. Manager mở từng worker theo thứ tự
-2. Mỗi worker mở browser visible
-3. Agent hoặc user đăng nhập vào đúng dịch vụ
-4. Nếu có captcha, xử lý ngay trong browser đó
+1. Manager mở cả 4 worker cùng lúc
+2. Mỗi worker mở browser visible và vào thẳng đúng website tương ứng
+3. Agent hoặc user đăng nhập vào từng dịch vụ trong đúng cửa sổ đó
+4. Nếu có captcha, xử lý ngay trong browser tương ứng
 5. Nếu có popup che ô chat, đóng nó
-6. Quay lại terminal
-7. Nhấn `Enter` để worker lưu session
-8. Manager chuyển sang worker tiếp theo
+6. Không cần nhấn `Enter` trong terminal
+7. Script không tự đóng browser ở chế độ setup
+8. Đăng nhập xong ở cửa sổ nào thì chờ 2-3 giây rồi tự đóng cửa sổ đó
+9. Khi cả 4 cửa sổ đã đóng hết, setup hoàn tất
 
 Sau setup, nên kiểm tra:
 - `profiles/chatgpt`
@@ -231,8 +232,9 @@ Không phải lúc nào cũng cần chạy lại toàn bộ `manager.py --setup 
 Nếu chỉ một worker bị lỗi:
 - mở đúng profile của worker đó
 - để user sửa tay
-- script tự autosave session định kỳ
-- khi sửa xong, user đóng browser
+- `fix-error.py` chỉ mở đúng browser/profile rồi tự kết thúc lệnh
+- browser sẽ giữ mở để user tự sửa tay
+- khi sửa xong, user tự đóng browser
 - chạy lại manager
 
 Lệnh nhanh:
@@ -273,7 +275,9 @@ Các lựa chọn trong menu:
 
 Lưu ý:
 - lệnh mở trực tiếp như `python fix-error.py chatgpt` không cần nhập thêm trong terminal
-- script sẽ giữ browser mở cho tới khi user tự đóng cửa sổ đó
+- `fix-error.py` chỉ là launcher, mở browser/profile xong là lệnh kết thúc ngay
+- browser vẫn giữ mở cho tới khi user tự đóng cửa sổ đó
+- setup lần đầu và fix lỗi đều không dùng bước nhấn `Enter`
 
 ## Lưu Ý GitHub
 

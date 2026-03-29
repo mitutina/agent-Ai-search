@@ -86,18 +86,30 @@ def run_setup(log_enabled: bool):
         print("=" * 80)
         print("AGENT-SEARCH SETUP")
         print("=" * 80)
-        print("Chế độ này sẽ mở từng worker bằng profile riêng để đăng nhập lần đầu.")
-        print("Sau mỗi worker, nhấn Enter trong terminal để lưu session rồi chuyển worker tiếp theo.")
+        print("Chế độ này sẽ mở cả 4 worker cùng lúc bằng profile riêng để đăng nhập lần đầu.")
+        print("Mỗi cửa sổ sẽ trỏ thẳng vào đúng website tương ứng để user dễ phân biệt.")
+        print("Không cần nhấn Enter trong terminal.")
+        print("User đăng nhập xong ở cửa sổ nào thì tự đóng cửa sổ đó.")
         print("=" * 80)
 
+    processes = []
     for worker in WORKERS:
         script_path = BASE_DIR / worker["script"]
         cmd = [sys.executable, str(script_path), "--setup", "1" if log_enabled else "0"]
         if log_enabled:
-            print(f"\n[MANAGER] Setup {worker['name']} -> {script_path.name}")
-        result = subprocess.run(cmd, cwd=str(BASE_DIR))
-        if result.returncode != 0:
-            raise RuntimeError(f"Setup {worker['name']} thất bại (exit code: {result.returncode})")
+            print(f"[MANAGER] Mở setup {worker['name']} -> {script_path.name}")
+        process = subprocess.Popen(cmd, cwd=str(BASE_DIR))
+        processes.append((worker, process))
+
+    failed_workers = []
+    for worker, process in processes:
+        returncode = process.wait()
+        if returncode != 0:
+            failed_workers.append((worker["name"], returncode))
+
+    if failed_workers:
+        details = ", ".join(f"{name} (exit code {code})" for name, code in failed_workers)
+        raise RuntimeError(f"Setup thất bại ở: {details}")
 
     if log_enabled:
         print("\n[MANAGER] ✓ Hoàn tất setup tất cả profile.")
