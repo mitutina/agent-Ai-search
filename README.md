@@ -1,6 +1,6 @@
 # agent-Ai-search
 Ver 6.4
-
+Đọc SKILL.md để xem hướng dẫn sử dụng và cài đặt
 Chức năng của Skill: Dùng chatgpt, gemini, qwen, deepseek để search và tổng hợp thông tin.
 
 Hướng dẫn sử dụng: Kêu Agent đọc Skill.md để biết cách sử dụng.
