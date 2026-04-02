@@ -711,21 +711,92 @@ def get_assistant_count(page):
 
 
 def wait_for_response(page, previous_count: int):
-    print("[Qwen] ?ang ??i response...")
+    print("[Qwen] Đang đợi response...")
     prev_text = ""
     stable_count = 0
-    max_wait = 480
+    max_wait = 1200  # Tăng từ 480 → 1200s (20 phút)
     saw_new_message = False
-    min_seconds = 12
-    min_chars = 20
+    min_seconds = 5  # Giảm từ 12 → 5s
+    min_chars = 50   # Tăng từ 20 → 50 chars
 
     def is_thinking_active():
+        """Check nếu Qwen đang thinking/reasoning."""
         try:
+            # Check body text (cũ)
             body_text = page.locator("body").inner_text(timeout=1000).lower()
+            text_keywords = ["thinking", "suy nghĩ", "reasoning"]
+            text_active = any(kw in body_text for kw in text_keywords)
+            
+            # Check UI indicators (mới)
+            thinking_indicators = [
+                ".thinking-indicator",
+                ".ant-spin",
+                ".loading-spinner",
+                "[class*='thinking']",
+                "[class*='reasoning']",
+            ]
+            ui_active = False
+            for selector in thinking_indicators:
+                try:
+                    el = page.locator(selector).first
+                    if el.is_visible(timeout=500):
+                        ui_active = True
+                        break
+                except Exception:
+                    pass
+            
+            # Check stop button (nếu có nút "Stop" = đang generate)
+            try:
+                stop_btn = page.locator("button").filter(has_text="Stop").first
+                stop_visible = stop_btn.is_visible(timeout=500)
+            except Exception:
+                stop_visible = False
+            
+            return text_active or ui_active or stop_visible
         except Exception:
             return False
-        keywords = ["thinking", "thinking completed", "suy ngh?", "reasoning", "??"]
-        return any(keyword in body_text for keyword in keywords)
+
+    def is_web_search_active():
+        """Check nếu Qwen đang search web."""
+        try:
+            search_indicators = [
+                "Searching",
+                "Đang tìm",
+                "sources",
+                "nguồn",
+            ]
+            body_text = page.locator("body").inner_text(timeout=1000).lower()
+            return any(kw.lower() in body_text for kw in search_indicators)
+        except Exception:
+            return False
+
+    def is_fully_done(page):
+        """Check tất cả signal cho thấy Qwen đã THẬT SỰ xong."""
+        try:
+            # Check có nút "Regenerate" hoặc "Copy" = đã xong
+            regen_btn = page.locator("button").filter(has_text="Regenerate").first
+            if regen_btn.is_visible(timeout=500):
+                return True
+            copy_btn = page.locator("button").filter(has_text="Copy").first
+            if copy_btn.is_visible(timeout=500):
+                return True
+            
+            # Check không còn loading indicator
+            loading_classes = [
+                ".ant-spin-dot-item",
+                ".loading-cursor",
+                "[class*='typing']",
+            ]
+            for sel in loading_classes:
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible(timeout=500):
+                        return False
+                except Exception:
+                    pass
+            return True
+        except Exception:
+            return False
 
     for second in range(max_wait):
         page.wait_for_timeout(1000)
@@ -734,42 +805,41 @@ def wait_for_response(page, previous_count: int):
         current_text = get_last_assistant_text(page).strip()
         current_text_clean = current_text.replace("Thinking completed", "", 1).strip()
         thinking_active = is_thinking_active()
+        search_active = is_web_search_active()
 
         if current_count > previous_count:
             saw_new_message = True
 
-        if second % 10 == 0:
+        # Log chi tiết hơn mỗi 30s
+        if second % 30 == 0:
+            status = []
+            if thinking_active: status.append("thinking")
+            if search_active: status.append("searching")
+            status_str = ", ".join(status) if status else "idle"
             print(
-                f"[Qwen] Ch? response... ({second}s, assistants={current_count}, chars={len(current_text_clean)}, thinking={thinking_active})"
+                f"[Qwen] Đang xử lý... ({second}s, assistants={current_count}, chars={len(current_text_clean)}, status={status_str})"
             )
 
-        if thinking_active and not current_text_clean:
-            stable_count = 0
-            continue
-
-        if not saw_new_message and thinking_active:
-            stable_count = 0
-            continue
-
-        if not saw_new_message or not current_text_clean:
-            prev_text = current_text_clean or prev_text
-            stable_count = 0
-            continue
-
-        if len(current_text_clean) < min_chars or second < min_seconds:
-            prev_text = current_text_clean
-            stable_count = 0
-            continue
-
-        if current_text_clean == prev_text:
+        # QUAN TRỌNG: Nếu text đủ dài (>100 chars) và stable ≥10s → chấp nhận
+        # KHÔNG BLOCK bởi thinking indicator (UI có thể giữ hiển thị "Thinking"
+        # dù đã xong output rồi)
+        if second >= 10 and len(current_text_clean) >= 100 and current_text_clean == prev_text:
             stable_count += 1
-            if stable_count >= 5:
-                print(f"[Qwen] ? Text ?n ??nh sau {second}s")
+            if stable_count >= 10:
+                print(f"[Qwen] ✓ Text ổn định sau {second}s ({len(current_text_clean)} chars)")
                 return current_text_clean
         else:
-            prev_text = current_text_clean
+            prev_text = current_text_clean or prev_text
             stable_count = 0
 
+        # Safety: nếu text rất dài (>500 chars) và không đổi 5s → return
+        if second >= 15 and len(current_text_clean) >= 500:
+            stable_count += 1
+            if stable_count >= 5:
+                print(f"[Qwen] ✓ Response dài ổn định sau {second}s ({len(current_text_clean)} chars)")
+                return current_text_clean
+
+    print(f"[Qwen] ⚠ Timeout sau {max_wait}s, trả về {len(prev_text)} chars")
     return prev_text.strip()
 
 def main():

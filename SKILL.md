@@ -6,6 +6,18 @@ Chỉ dùng trên máy có giao diện desktop thật:
 - hỗ trợ Windows hoặc Linux có màn hình và mở được browser
 - không hỗ trợ máy chỉ có terminal, headless server, VPS không GUI
 
+## 🚨 QUY TẮC BẮT BUỘC - KHÔNG ĐƯỢC PHÁ VỠ
+
+**TUYỆT ĐỐI KHÔNG được chạy `manager.py` với query ngắn, thiếu ngữ cảnh.**
+**LUÔN PHẢI viết lại query theo mẫu prompt (Context/Problem/Tried/Current state/Question/Goal).**
+
+Web AI KHÔNG đọc được lịch sử chat của user — nó chỉ thấy đúng chuỗi query bạn truyền vào.
+Nếu hỏi cụt lủn, kết quả sẽ vô dụng hoặc sai lệch.
+
+**Vi phạm quy tắc này = skill vô dụng.**
+
+Chi tiết cách viết prompt đúng → xem section "Soạn Câu Hỏi Trước Khi Chạy" bên dưới.
+
 ## Preflight Ngắn
 
 Trước khi chạy skill, agent phải check nhanh:
@@ -61,7 +73,7 @@ python3 manager.py "Câu hỏi của bạn" 0
 
 Login hoặc sửa Session chỉ dùng một nhóm lệnh duy nhất, khi chạy lệnh này xong Agent phải nhắc user đăng nhập khoản trên trình duyệt popup lên, sau đó tự đóng browser khi xong.:
 
-Windows:
+Windows (dùng fix-error.py bình thường):
 
 ```bash
 python fix-error.py chatgpt
@@ -71,14 +83,22 @@ python fix-error.py qwen
 python fix-error.py all
 ```
 
-Linux:
+Linux (DÙNG nohup ĐỂ TRÁNH BỊ VẰNG):
+
+⚠️ **QUAN TRỌNG:** Trên Linux, `fix-error.py` mở Chrome qua `subprocess.Popen` rồi exit ngay. Khi chạy qua exec tool, Chrome sẽ bị kill theo parent process → browser tắt ngang trước khi user kịp đăng nhập.
+**Giải pháp:** Mở thủ công bằng `nohup` (detached, không bị kill khi lệnh kết thúc):
 
 ```bash
-python3 fix-error.py chatgpt
-python3 fix-error.py gemini
-python3 fix-error.py deepseek
-python3 fix-error.py qwen
-python3 fix-error.py all
+# Mở TẤT CẢ 4 browser cùng lúc (máy mới / đăng nhập lại hết):
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/chatgpt --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chatgpt.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/gemini --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://gemini.google.com/app > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/deepseek --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.deepseek.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/qwen --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.qwen.ai/ > /dev/null 2>&1 &
+```
+
+```bash
+# Mở TỪNG worker (chỉ 1 cái bị lỗi):
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/chatgpt --profile-directory=Default --disable-gpu https://chatgpt.com/ > /dev/null 2>&1 &
 ```
 
 Quy tắc:
@@ -86,7 +106,8 @@ Quy tắc:
 - không cần nhấn Enter trong terminal
 - `all` dùng cho máy mới hoặc khi cần đăng nhập lại nhiều worker cùng lúc
 - `chatgpt|gemini|deepseek|qwen` dùng khi chỉ một worker bị lỗi login/captcha/session
-- `fix-error.py` chỉ mở Chrome thật với đúng profile rồi kết thúc ngay
+- **Linux: LUÔN dùng `nohup` + path tuyệt đối tới `--user-data-dir`**
+- `fix-error.py` chỉ hoạt động tốt trên Windows; trên Linux có thể bị văng browser
 - user đăng nhập xong thì tự đóng browser
 
 ## Soạn Câu Hỏi Trước Khi Chạy

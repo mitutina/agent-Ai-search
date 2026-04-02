@@ -171,21 +171,29 @@ Windows:
 python fix-error.py all
 ```
 
-Linux:
+Linux (CHỈ DÙNG NOHUP, KHÔNG DÙNG fix-error.py):
+
+⚠️ **Trên Linux, `fix-error.py` sẽ bị văng browser ngay vì process cha exit. Dùng `nohup` thay thế:**
 
 ```bash
-python3 fix-error.py all
+# Mở cả 4 browser (ChatGPT, Gemini, DeepSeek, Qwen) cùng lúc:
+nohup /usr/bin/google-chrome --user-data-dir=$PWD/profiles/chatgpt --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chatgpt.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$PWD/profiles/gemini --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://gemini.google.com/app > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$PWD/profiles/deepseek --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.deepseek.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$PWD/profiles/qwen --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.qwen.ai/ > /dev/null 2>&1 &
 ```
 
+(Lưu ý: nếu Chrome ở đường dẫn khác, thay `/usr/bin/google-chrome` bằng `which google-chrome` hoặc `which chromium`)
+
 Quy trình setup:
-1. `fix-error.py all` mở Chrome thật cho cả 4 profile cùng lúc
+1. Dùng `nohup` command trên để mở 4 cửa sổ Chrome cho cả 4 profile
 2. Mỗi cửa sổ vào thẳng đúng website tương ứng
 3. Agent hoặc user đăng nhập vào từng dịch vụ trong đúng cửa sổ đó
 4. Nếu có captcha, xử lý ngay trong browser tương ứng
 5. Nếu có popup che ô chat, đóng nó
 6. Không cần nhấn `Enter` trong terminal
-7. Lệnh chỉ mở browser rồi kết thúc ngay
-8. Script không tự đóng browser ở chế độ login/fix
+7. Browser sẽ giữ mở cho tới khi user tự đóng cửa sổ
+8. Script `nohup` đã exit, nhưng Chrome vẫn chạy độc lập
 9. Đăng nhập xong ở cửa sổ nào thì tự đóng cửa sổ đó
 
 Sau setup, nên kiểm tra:
@@ -227,17 +235,13 @@ python3 manager.py "test" 0
 
 ## Sửa Lỗi Login hoặc Captcha Sau Này
 
-Không phải lúc nào cũng cần mở lại cả 4 profile bằng `fix-error.py all`.
+Không phải lúc nào cũng cần mở lại cả 4 profile.
 
 Nếu chỉ một worker bị lỗi:
 - mở đúng profile của worker đó
 - để user sửa tay
-- `fix-error.py` chỉ mở Chrome thật với đúng browser/profile rồi tự kết thúc lệnh
-- browser sẽ giữ mở để user tự sửa tay
 - khi sửa xong, user tự đóng browser
 - chạy lại manager
-
-Lệnh nhanh:
 
 Windows:
 
@@ -249,23 +253,22 @@ python fix-error.py qwen
 python fix-error.py all
 ```
 
-Linux:
+Linux (DÙNG NOHUP, KHÔNG DÙNG fix-error.py):
+⚠️ **`fix-error.py` có thể bị văng browser trên Linux. Dùng `nohup` cho từng profile:**
 
 ```bash
-python3 fix-error.py chatgpt
-python3 fix-error.py gemini
-python3 fix-error.py deepseek
-python3 fix-error.py qwen
-python3 fix-error.py all
+# Mở từng cái cần sửa:
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/chatgpt --profile-directory=Default --disable-gpu https://chatgpt.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/gemini --profile-directory=Default --disable-gpu https://gemini.google.com/app > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/deepseek --profile-directory=Default --disable-gpu https://chat.deepseek.com/ > /dev/null 2>&1 &
+nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/qwen --profile-directory=Default --disable-gpu https://chat.qwen.ai/ > /dev/null 2>&1 &
 ```
 
-Không còn menu.
-
 Lưu ý:
-- lệnh mở trực tiếp như `python fix-error.py chatgpt` không cần nhập thêm trong terminal
-- `fix-error.py` chỉ là launcher, mở Chrome thật với đúng profile xong là lệnh kết thúc ngay
-- browser vẫn giữ mở cho tới khi user tự đóng cửa sổ đó
-- setup lần đầu và fix lỗi đều không dùng bước nhấn `Enter`
+- `fix-error.py` hoạt động như launcher (mở Chrome xong exit) — tốt trên Windows
+- Trên Linux, browser sẽ bị kill theo parent process → **dùng `nohup` thay thế**
+- Browser sẽ giữ mở cho tới khi user tự đóng cửa sổ
+- Không dùng bước nhấn `Enter` trong terminal
 
 ## Lưu Ý GitHub
 
