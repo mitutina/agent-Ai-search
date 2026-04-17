@@ -603,6 +603,7 @@ PROFILE_DIR = BASE_DIR / "profiles" / "deepseek"
 STORAGE_STATE_PATH = BASE_DIR / "profiles" / "deepseek_storage_state.json"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
+FLAGS_DIR = OUTPUT_DIR / "flags"
 TIMEOUT_MS = 60000
 CDP_PORT = 9333
 
@@ -833,14 +834,7 @@ def main():
                 if blockers.get("hasLoginPrompt") or blockers.get("hasLogoutMarker"):
                     raise Exception("DeepSeek chưa đăng nhập trong profile - hãy chạy --setup")
 
-                try:
-                    debug_dir = OUTPUT_DIR / "debug"
-                    debug_dir.mkdir(parents=True, exist_ok=True)
-                    debug_png = debug_dir / f"deepseek_before_input_{timestamp}.png"
-                    page.screenshot(path=str(debug_png), full_page=True)
-                    print(f"[{engine}] 🧪 Debug saved: {debug_png}")
-                except Exception as e:
-                    print(f"[{engine}] ⚠ Không lưu debug được: {e}")
+                # Debug screenshot disabled (production mode)
 
                 print(f"[{engine}] Đang nhập câu hỏi...")
                 textarea = None
@@ -951,7 +945,12 @@ def main():
             print(f"[{engine}] ✗ Lỗi: {e}")
         finally:
             try:
-                if page:
+                # Wait for IndexedDB to flush to disk
+                indexeddb_path = PROFILE_DIR / "Default" / "IndexedDB"
+                if not indexeddb_path.exists():
+                    print(f"[{engine}] ⚠ IndexedDB folder chưa có, đợi thêm 5s để tạo...")
+                    page.wait_for_timeout(5000)
+                else:
                     page.wait_for_timeout(2000)
             except Exception:
                 pass
@@ -959,7 +958,23 @@ def main():
 
     result["time"] = (datetime.now() - start_time).total_seconds()
     finalize_worker_run(engine, TEMP_DIR, "deepseek", timestamp, result, log_enabled)
+    _create_flag_file("deepseek", timestamp, log_enabled)
+
     sys.exit(0 if result["success"] else 1)
+
+
+def _create_flag_file(prefix: str, timestamp: str, log_enabled: bool):
+    """LUÔN tạo flag file để cleanup monitor không bị kẹt."""
+    if timestamp is None:
+        return
+    try:
+        ensure_dirs(FLAGS_DIR)
+        flag_path = FLAGS_DIR / f"{prefix}_{timestamp}.done"
+        flag_path.write_text("done", encoding="utf-8")
+        if log_enabled:
+            print(f"[{prefix}] ✓ Đã tạo flag: {flag_path.name}")
+    except Exception as flag_exc:
+        print(f"[{prefix}] ⚠ Không tạo được flag file: {flag_exc}")
 
 
 if __name__ == "__main__":

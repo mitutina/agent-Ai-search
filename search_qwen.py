@@ -600,6 +600,7 @@ PROFILE_DIR = resolve_profile_dir(BASE_DIR, "qwen", legacy_names=["Qwen"])
 STORAGE_STATE_PATH = BASE_DIR / "profiles" / "qwen_storage_state.json"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
+FLAGS_DIR = OUTPUT_DIR / "flags"
 TIMEOUT_MS = 60000
 CDP_PORT = 9334
 
@@ -918,7 +919,7 @@ def main():
                     result["data"] = response_text or None
                     print(f"[{engine}] ✗ Lỗi: {result['error']}")
 
-                save_storage_state(context, STORAGE_STATE_PATH, engine)
+                # ← Bỏ save_storage_state ở đây, để finally xử lý
 
         except PlaywrightTimeoutError as exc:
             result["error"] = f"Timeout: {exc}"
@@ -927,16 +928,42 @@ def main():
             result["error"] = f"Lỗi: {exc}"
             print(f"[{engine}] ✗ Lỗi: {exc}")
         finally:
+            # ✅ LUÔN save storage_state (kể cả khi lỗi) để giữ session fresh
             try:
-                if page is not None:
-                    page.wait_for_timeout(1500)
+                # Wait for IndexedDB to flush to disk
+                indexeddb_path = PROFILE_DIR / "Default" / "IndexedDB"
+                if not indexeddb_path.exists():
+                    print(f"[{engine}] ⚠ IndexedDB folder chưa có, đợi thêm 5s để tạo...")
+                    page.wait_for_timeout(5000)
+                else:
+                    page.wait_for_timeout(2000)
+            except Exception:
+                pass
+            try:
+                save_storage_state(context, STORAGE_STATE_PATH, engine)
             except Exception:
                 pass
             close_attached_browser(browser, chrome_process)
 
     result["time"] = (datetime.now() - start_time).total_seconds()
     finalize_worker_run(engine, TEMP_DIR, "qwen", timestamp, result, log_enabled)
+    _create_flag_file("qwen", timestamp, log_enabled)
+
     sys.exit(0 if result["success"] else 1)
+
+
+def _create_flag_file(prefix: str, timestamp: str, log_enabled: bool):
+    """LUÔN tạo flag file để cleanup monitor không bị kẹt."""
+    if timestamp is None:
+        return
+    try:
+        ensure_dirs(FLAGS_DIR)
+        flag_path = FLAGS_DIR / f"{prefix}_{timestamp}.done"
+        flag_path.write_text("done", encoding="utf-8")
+        if log_enabled:
+            print(f"[{prefix}] ✓ Đã tạo flag: {flag_path.name}")
+    except Exception as flag_exc:
+        print(f"[{prefix}] ⚠ Không tạo được flag file: {flag_exc}")
 
 
 if __name__ == "__main__":

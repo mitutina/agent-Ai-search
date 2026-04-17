@@ -602,64 +602,9 @@ PROFILE_DIR = BASE_DIR / "profiles" / "chatgpt"
 STORAGE_STATE_PATH = BASE_DIR / "profiles" / "chatgpt_storage_state.json"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
-DEBUG_DIR = OUTPUT_DIR / "debug"
+FLAGS_DIR = OUTPUT_DIR / "flags"
 TIMEOUT_MS = 60000
 CDP_PORT = 9331
-
-def _verify_web_search_on(page) -> bool:
-    """Verify web search đã ON bằng cách tìm 'Search' hoặc '🌐' ở composer area."""
-    try:
-        result = page.evaluate(r"""
-            () => {
-                const norm = (t) => (t || '').replace(/\s+/g,' ').trim().toLowerCase();
-                
-                // Tìm "Search" hoặc "🌐" ở nửa dưới màn hình
-                let foundSearch = false;
-                let foundGlobe = false;
-                const debugInfo = { searchTexts: [], globeTexts: [] };
-                
-                const allEls = Array.from(document.querySelectorAll('*'));
-                for (const el of allEls) {
-                    const r = el.getBoundingClientRect();
-                    // Bỏ filter size để tìm tất cả
-                    if (r.top < window.innerHeight * 0.5) continue;  // Chỉ nửa dưới
-                    
-                    const s = getComputedStyle(el);
-                    if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') continue;
-                    
-                    const text = norm(el.innerText || el.textContent || '');
-                    
-                    // Tìm "search"
-                    if (text.includes('search')) {
-                        foundSearch = true;
-                        debugInfo.searchTexts.push(text.slice(0, 50));
-                    }
-                    
-                    // Tìm globe emoji
-                    const rawText = el.innerText || el.textContent || '';
-                    if (rawText.includes('🌐')) {
-                        foundGlobe = true;
-                        debugInfo.globeTexts.push(rawText.slice(0, 50));
-                    }
-                }
-                
-                return {
-                    success: foundSearch && foundGlobe,
-                    foundSearch,
-                    foundGlobe,
-                    debugInfo
-                };
-            }
-        """)
-        
-        print(f"[Verify Debug] foundSearch={result.get('foundSearch')}, foundGlobe={result.get('foundGlobe')}")
-        print(f"[Verify Debug] searchTexts={result.get('debugInfo', {}).get('searchTexts', [])[:3]}")
-        print(f"[Verify Debug] globeTexts={result.get('debugInfo', {}).get('globeTexts', [])[:3]}")
-        
-        return result.get('success', False)
-    except Exception as e:
-        print(f"[Verify Debug] Exception: {e}")
-        return False
 
 
 def enable_web_search(page, engine, timestamp):
@@ -683,18 +628,25 @@ def enable_web_search(page, engine, timestamp):
 
         def hover_them_to_open_submenu():
             """
-            HOVER vào "Thêm" để mở submenu - đã verify bằng debug script v8.
-            Trả về tọa độ để Playwright hover.
+            HOVER vào "Thêm" để mở submenu.
+            CHỈ TÌM TRONG NỬA DƯỚI MÀN HÌNH (gần composer) để tránh nhầm nút More ở layout chính.
             """
             them_info = page.evaluate(r"""() => {
                 const results = { found: false, them_text: '', x: 0, y: 0, all_items: [] };
 
-                // Tìm menu items
+                // Tìm menu items CHỈ Ở NỬA DƯỚI màn hình (gần composer)
                 const menuItems = Array.from(document.querySelectorAll('div.__menu-item, div[role="menuitem"]'));
                 console.log('[WS] Found', menuItems.length, 'menu items');
 
                 for (const el of menuItems) {
                     const r = el.getBoundingClientRect();
+                    
+                    // ✅ CHỈ LẤY ELEMENT Ở NỬA DƯỚI MÀN HÌNH (y > 50% viewport)
+                    if (r.top < window.innerHeight * 0.5) {
+                        console.log('[WS] Skip (top half):', (el.innerText || '').slice(0, 30), '@', Math.round(r.y));
+                        continue;
+                    }
+                    
                     if (r.width < 10 || r.height < 8) continue;
                     const s = getComputedStyle(el);
                     if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') continue;
@@ -762,7 +714,7 @@ def enable_web_search(page, engine, timestamp):
         open_plus_menu()
 
         result1 = hover_them_to_open_submenu()
-        print(f"[{engine}]   - Hover 'Thêm': {result1.get('found')} ('{result1.get('them_text', '')}')")
+        print(f"[{engine}]   - Hover 'Thêm': {result1.get('found')} ('{result1.get('them_text', '')}') @ ({result1.get('x', 0)}, {result1.get('y', 0)})")
 
         if not result1.get('found'):
             print(f"[{engine}] ✗ Không tìm thấy 'Thêm'")
@@ -771,12 +723,6 @@ def enable_web_search(page, engine, timestamp):
 
         # Chờ submenu mở sau khi hover
         page.wait_for_timeout(2000)
-        try:
-            dbg_hover = DEBUG_DIR / f"chatgpt_submenu_after_hover_them_{timestamp}.png"
-            page.screenshot(path=str(dbg_hover), full_page=True)
-            print(f"[{engine}] 🧪 Submenu screenshot: {dbg_hover}")
-        except Exception:
-            pass
 
         result2 = click_web_search_in_submenu()
         print(f"[{engine}]   - Click WS: {result2}")
@@ -788,13 +734,6 @@ def enable_web_search(page, engine, timestamp):
 
         page.wait_for_timeout(2000)
         print(f"[{engine}] ✓ Đã click '{result2.get('text', '')}' - Web Search ON")
-        
-        try:
-            dbg = DEBUG_DIR / f"chatgpt_websearch_enabled_{timestamp}.png"
-            page.screenshot(path=str(dbg), full_page=True)
-            print(f"[{engine}] 🧪 Screenshot: {dbg}")
-        except Exception:
-            pass
 
         return True
 
@@ -886,7 +825,7 @@ def main():
     result = {"success": False, "data": None, "error": None, "time": 0}
     start_time = datetime.now()
 
-    ensure_dirs(PROFILE_DIR, OUTPUT_DIR, TEMP_DIR, DEBUG_DIR)
+    ensure_dirs(PROFILE_DIR, OUTPUT_DIR, TEMP_DIR)
 
     browser = None
     context = None
@@ -932,28 +871,9 @@ def main():
                 page.wait_for_timeout(2000)
                 enabled = enable_web_search(page, engine, timestamp)
 
-                try:
-                    dbg_png = DEBUG_DIR / f"chatgpt_tools_{timestamp}.png"
-                    dbg_html = DEBUG_DIR / f"chatgpt_tools_{timestamp}.html"
-                    page.screenshot(path=str(dbg_png), full_page=True)
-                    dbg_html.write_text(page.content(), encoding="utf-8")
-                    print(f"[{engine}] 🧪 Debug saved: {dbg_png}")
-                    print(f"[{engine}] 🧪 Debug saved: {dbg_html}")
-                except Exception as e:
-                    print(f"[{engine}] ⚠ Không lưu debug được: {e}")
-
                 if not enabled:
                     result["error"] = "BẮT BUỘC Web Search ON nhưng không bật được (UI/feature bị ẩn hoặc selector không khớp)"
                     print(f"[{engine}] ✗ {result['error']}")
-                    try:
-                        dbg_fail_png = DEBUG_DIR / f"chatgpt_websearch_fail_{timestamp}.png"
-                        dbg_fail_html = DEBUG_DIR / f"chatgpt_websearch_fail_{timestamp}.html"
-                        page.screenshot(path=str(dbg_fail_png), full_page=True)
-                        dbg_fail_html.write_text(page.content(), encoding="utf-8")
-                        print(f"[{engine}] 🧪 Debug saved: {dbg_fail_png}")
-                        print(f"[{engine}] 🧪 Debug saved: {dbg_fail_html}")
-                    except Exception as e:
-                        print(f"[{engine}] ⚠ Không lưu debug fail-websearch được: {e}")
 
                     save_storage_state(context, STORAGE_STATE_PATH, engine)
                     raise Exception(result["error"])
@@ -967,16 +887,6 @@ def main():
                 send_button.click()
 
                 page.wait_for_timeout(2000)
-
-                try:
-                    dbg2_png = DEBUG_DIR / f"chatgpt_after_send_{timestamp}.png"
-                    dbg2_html = DEBUG_DIR / f"chatgpt_after_send_{timestamp}.html"
-                    page.screenshot(path=str(dbg2_png), full_page=True)
-                    dbg2_html.write_text(page.content(), encoding="utf-8")
-                    print(f"[{engine}] 🧪 Debug saved: {dbg2_png}")
-                    print(f"[{engine}] 🧪 Debug saved: {dbg2_html}")
-                except Exception as e:
-                    print(f"[{engine}] ⚠ Không lưu debug after_send được: {e}")
 
                 def is_chatgpt_busy():
                     return page.evaluate(r"""
@@ -1092,7 +1002,7 @@ def main():
                     if response_text:
                         result["data"] = response_text
 
-                save_storage_state(context, STORAGE_STATE_PATH, engine)
+                # ← Bỏ save_storage_state ở đây, để finally xử lý
 
         except PlaywrightTimeoutError as e:
             result["error"] = f"Timeout: {str(e)}"
@@ -1101,16 +1011,42 @@ def main():
             result["error"] = f"Lỗi: {str(e)}"
             print(f"[{engine}] ✗ Lỗi: {e}")
         finally:
+            # ✅ LUÔN save storage_state (kể cả khi lỗi) để giữ session fresh
             try:
-                if page:
+                # Wait for IndexedDB to flush to disk
+                indexeddb_path = PROFILE_DIR / "Default" / "IndexedDB"
+                if not indexeddb_path.exists():
+                    print(f"[{engine}] ⚠ IndexedDB folder chưa có, đợi thêm 5s để tạo...")
+                    page.wait_for_timeout(5000)
+                else:
                     page.wait_for_timeout(2000)
+            except Exception:
+                pass
+            try:
+                save_storage_state(context, STORAGE_STATE_PATH, engine)
             except Exception:
                 pass
             close_attached_browser(browser, chrome_process)
 
     result["time"] = (datetime.now() - start_time).total_seconds()
     finalize_worker_run(engine, TEMP_DIR, "chatgpt", timestamp, result, log_enabled)
+    _create_flag_file("chatgpt", timestamp, log_enabled)
     sys.exit(0 if result["success"] else 1)
+
+
+def _create_flag_file(prefix: str, timestamp: str, log_enabled: bool):
+    """LUÔN tạo flag file để cleanup monitor không bị kẹt."""
+    if timestamp is None:
+        return
+    try:
+        ensure_dirs(FLAGS_DIR)
+        flag_path = FLAGS_DIR / f"{prefix}_{timestamp}.done"
+        flag_path.write_text("done", encoding="utf-8")
+        if log_enabled:
+            print(f"[{prefix}] ✓ Đã tạo flag: {flag_path.name}")
+    except Exception as flag_exc:
+        print(f"[{prefix}] ⚠ Không tạo được flag file: {flag_exc}")
+
 
 if __name__ == "__main__":
     main()

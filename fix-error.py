@@ -573,7 +573,6 @@ def run_fix(target):
 
     print("Fix-error sẽ mở Chrome thật với đúng profile rồi thoát ngay.")
     print("Không dùng Playwright cho bước đăng nhập thủ công.")
-    print("Khi sửa xong, user tự đóng các cửa sổ browser tương ứng.")
     print("")
 
     for index, worker in enumerate(selected_workers):
@@ -582,8 +581,26 @@ def run_fix(target):
             time.sleep(1)
 
     print("")
-    print("✓ Đã mở xong các cửa sổ cần sửa lỗi.")
-    print("✓ Lệnh này kết thúc ngay, không giữ vòng lặp chờ nữa.")
+    print("=" * 80)
+    print("⚠️  QUAN TRỌNG - ĐỢI ĐỦ THỜI GIAN ĐỂ SESSION ĐƯỢC LƯU!")
+    print("=" * 80)
+    print("")
+    print("1. Đăng nhập vào từng trang Chrome")
+    print("2. SAU KHI ĐĂNG NHẬP XONG, ĐỢI THÊM 30 GIÂY")
+    print("3. Sau đó đóng từng cửa sổ browser")
+    print("")
+    print("Nếu đóng quá nhanh, IndexedDB sẽ không được tạo → session bị mất!")
+    print("")
+    print("Nhấn ENTER khi đã đăng nhập xong và đợi đủ 30 giây...")
+    print("=" * 80)
+    
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        pass
+    
+    print("")
+    print("✓ Đã hoàn tất. Giờ có thể đóng các cửa sổ browser.")
 
 
 def main():

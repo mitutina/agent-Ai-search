@@ -604,6 +604,7 @@ PROFILE_DIR = BASE_DIR / "profiles" / "gemini"
 STORAGE_STATE_PATH = BASE_DIR / "profiles" / "gemini_storage_state.json"
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
+FLAGS_DIR = OUTPUT_DIR / "flags"
 TIMEOUT_MS = 60000
 CDP_PORT = 9332
 
@@ -905,15 +906,7 @@ def select_model_with_fallback(page, engine, timestamp=None, output_dir=None):
         print(f"[{engine}] ✓ Đã mở menu model (button: '{open_result.get('text')}', score={open_result.get('score')})")
         page.wait_for_timeout(1200)
 
-        if timestamp and output_dir:
-            try:
-                debug_dir = output_dir / "debug"
-                debug_dir.mkdir(parents=True, exist_ok=True)
-                debug_png = debug_dir / f"gemini_model_menu_open_{timestamp}.png"
-                page.screenshot(path=str(debug_png), full_page=True)
-                print(f"[{engine}] 🧪 Snapshot menu: {debug_png}")
-            except Exception as e:
-                print(f"[{engine}] ⚠ Không lưu snapshot menu được: {e}")
+        # Debug screenshot disabled (production mode)
 
         menu_info = collect_menu_info()
 
@@ -934,15 +927,7 @@ def select_model_with_fallback(page, engine, timestamp=None, output_dir=None):
                     f"(chip hiện tại: '{current_model.get('text')}')"
                 )
 
-                # Chụp snapshot SAU KHI chọn Tư duy để verify
-                if timestamp and output_dir:
-                    try:
-                        debug_dir = output_dir / "debug"
-                        debug_png = debug_dir / f"gemini_after_select_thinking_{timestamp}.png"
-                        page.screenshot(path=str(debug_png), full_page=True)
-                        print(f"[{engine}] 🧪 Snapshot sau khi chọn Tư duy: {debug_png}")
-                    except Exception as e:
-                        print(f"[{engine}] ⚠ Không lưu snapshot sau chọn được: {e}")
+                # Debug screenshot disabled (production mode)
 
                 return True
 
@@ -1176,9 +1161,19 @@ def main():
             result["error"] = f"Lỗi: {str(e)}"
             print(f"[{engine}] ✗ Lỗi: {e}")
         finally:
+            # ✅ Ensure storage_state is saved BEFORE closing browser
             try:
-                if page:
+                # Check if IndexedDB folder exists, if not wait longer
+                indexeddb_path = PROFILE_DIR / "Default" / "IndexedDB"
+                if not indexeddb_path.exists():
+                    print(f"[{engine}] ⚠ IndexedDB folder chưa có, đợi thêm 5s để tạo...")
+                    page.wait_for_timeout(5000)
+                else:
                     page.wait_for_timeout(2000)
+            except Exception:
+                pass
+            try:
+                save_storage_state(context, STORAGE_STATE_PATH, engine)
             except Exception:
                 pass
             close_attached_browser(browser, chrome_process)
@@ -1186,7 +1181,24 @@ def main():
     result["time"] = (datetime.now() - start_time).total_seconds()
 
     finalize_worker_run(engine, TEMP_DIR, "gemini", timestamp, result, log_enabled)
+    _create_flag_file("gemini", timestamp, log_enabled)
+
     sys.exit(0 if result["success"] else 1)
+
+
+def _create_flag_file(prefix: str, timestamp: str, log_enabled: bool):
+    """LUÔN tạo flag file để cleanup monitor không bị kẹt."""
+    if timestamp is None:
+        return
+    try:
+        ensure_dirs(FLAGS_DIR)
+        flag_path = FLAGS_DIR / f"{prefix}_{timestamp}.done"
+        flag_path.write_text("done", encoding="utf-8")
+        if log_enabled:
+            print(f"[{prefix}] ✓ Đã tạo flag: {flag_path.name}")
+    except Exception as flag_exc:
+        print(f"[{prefix}] ⚠ Không tạo được flag file: {flag_exc}")
+
 
 if __name__ == "__main__":
     main()

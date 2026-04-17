@@ -891,6 +891,157 @@ def main():
     result_file = merge_results(query, timestamp, worker_status)
     print_summary(log_enabled, query, timestamp, result_file, worker_status)
 
+    # Run cleanup monitor AFTER all workers complete (not as daemon thread)
+    if log_enabled:
+        print(f"\n[MANAGER] Bắt đầu cleanup Chrome processes...")
+    run_cleanup_monitor(timestamp, log_enabled)
+
+
+def run_cleanup_monitor(timestamp: str, log_enabled: bool):
+    """Cleanup monitor đơn giản:
+    - Đợi đủ 4 flag (hoặc timeout)
+    - Dò 4 port cố định 9331..9334
+    - Kill process theo PID từ port
+    """
+    FLAGS_DIR = OUTPUT_DIR / "flags"
+    PORTS = [9331, 9332, 9333, 9334]
+    POLL_INTERVAL = 2
+    MAX_WAIT = 180
+
+    def ensure_flags_dir():
+        FLAGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def count_flags() -> tuple[int, list[str]]:
+        done = []
+        for worker in WORKERS:
+            flag_file = FLAGS_DIR / f"{worker['temp_prefix']}_{timestamp}.done"
+            if flag_file.exists():
+                done.append(worker['name'])
+        return len(done), done
+
+    def get_pids_by_port_windows(port: int) -> list[int]:
+        pids = set()
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # Ví dụ: TCP    127.0.0.1:9331    0.0.0.0:0    LISTENING    8840
+                if f":{port}" not in line or "LISTENING" not in line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 5 and parts[-1].isdigit():
+                    pids.add(int(parts[-1]))
+        except Exception:
+            pass
+        return sorted(pids)
+
+    def get_pids_by_port_linux(port: int) -> list[int]:
+        pids = set()
+        try:
+            result = subprocess.run(
+                ["ss", "-ltnp"],
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" not in line:
+                    continue
+                # ... users:(("chrome",pid=1234,fd=...))
+                if "pid=" in line:
+                    chunk = line.split("pid=")[1].split(",")[0]
+                    if chunk.isdigit():
+                        pids.add(int(chunk))
+        except Exception:
+            pass
+        return sorted(pids)
+
+    def kill_pid(pid: int) -> bool:
+        try:
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    ["taskkill", "/F", "/PID", str(pid), "/T"],
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                )
+                return result.returncode == 0
+            result = subprocess.run(
+                ["kill", "-9", str(pid)],
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def kill_by_port(port: int) -> tuple[bool, list[int]]:
+        pids = get_pids_by_port_windows(port) if platform.system() == "Windows" else get_pids_by_port_linux(port)
+        if not pids:
+            return False, []
+
+        killed_any = False
+        killed_pids = []
+        for pid in pids:
+            if kill_pid(pid):
+                killed_any = True
+                killed_pids.append(pid)
+        return killed_any, killed_pids
+
+    ensure_flags_dir()
+
+    if log_enabled:
+        print(f"[CleanupMonitor] Bắt đầu giám sát (timestamp: {timestamp})")
+        print("[CleanupMonitor] Đợi đủ 4 flag...")
+
+    start_time = time.time()
+    while True:
+        done_count, done_workers = count_flags()
+        if done_count >= 4:
+            if log_enabled:
+                print(f"[CleanupMonitor] ✓ Đủ flag: {', '.join(done_workers)} ({done_count}/4)")
+            break
+
+        if time.time() - start_time > MAX_WAIT:
+            if log_enabled:
+                print(f"[CleanupMonitor] ⚠ Timeout {MAX_WAIT}s - tiếp tục cleanup theo port")
+            break
+
+        if log_enabled and done_count > 0:
+            print(f"[CleanupMonitor] Đã có flag: {', '.join(done_workers)} ({done_count}/4)")
+        time.sleep(POLL_INTERVAL)
+
+    if log_enabled:
+        print("[CleanupMonitor] Kill theo 4 port cố định...")
+
+    killed_ports = []
+    missing_ports = []
+    for port in PORTS:
+        ok, pids = kill_by_port(port)
+        if ok:
+            killed_ports.append(f"{port}:{','.join(map(str, pids))}")
+            if log_enabled:
+                print(f"[CleanupMonitor] ✓ Port {port} -> Killed PID(s): {', '.join(map(str, pids))}")
+        else:
+            missing_ports.append(str(port))
+            if log_enabled:
+                print(f"[CleanupMonitor] ⚠ Port {port} không thấy process LISTENING")
+
+    if log_enabled:
+        if killed_ports:
+            print(f"[CleanupMonitor] Đã kill theo port: {' | '.join(killed_ports)}")
+        if missing_ports:
+            print(f"[CleanupMonitor] Port không có process: {', '.join(missing_ports)}")
+        print("[CleanupMonitor] ✓ Hoàn thành cleanup monitor")
+
 
 if __name__ == "__main__":
     try:
