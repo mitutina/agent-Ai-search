@@ -53,9 +53,39 @@ python3 manager.py "query của bạn" 0
 
 **⚠️ BẮT BUỘC:** Dùng Python và Chrome của Windows, không dùng python3 của WSL.
 
+**🔍 Bước 1: Tìm Python path (chỉ làm lần đầu)**
+```bash
+# Tìm Python trong AppData:
+ls /mnt/c/Users/*/AppData/Local/Programs/Python/
+
+# Hoặc tìm trong Program Files:
+ls /mnt/c/Program\ Files/Python*/
+
+# Hoặc kiểm tra python có trong PATH không:
+/mnt/c/Windows/System32/cmd.exe /c "where python"
+```
+
+**📝 Bước 2: Chạy với path tìm được**
+
+**Cách 1 (Khuyến nghị): Dùng trực tiếp Windows Python**
+```bash
+# Ví dụ với Python313:
+/mnt/c/Users/openclaw/AppData/Local/Programs/Python/Python313/python.exe manager.py "query của bạn" 1
+
+# Hoặc với Python từ Program Files:
+/mnt/c/Program\ Files/Python312/python.exe manager.py "query của bạn" 1
+```
+
+**Cách 2: Qua cmd.exe (nếu python đã có trong PATH)**
 ```bash
 /mnt/c/Windows/System32/cmd.exe /c "python manager.py \"query của bạn\" 1"
 ```
+⚠️ Dễ lỗi quotes/args khi query phức tạp. Chỉ dùng khi Cách 1 không tìm được Python.
+
+**💡 GHI CHÚ CHO AGENT:**
+- **Lần đầu chạy skill trên máy mới:** Phải tìm Python path bằng lệnh trên, test chạy thành công, rồi **GHI LẠI path đúng vào đây** (edit SKILL.md) để lần sau không phải tìm lại.
+- **Ví dụ ghi chú:** `# Máy này dùng: /mnt/c/Users/openclaw/AppData/Local/Programs/Python/Python313/python.exe`
+- **Mỗi máy khác nhau:** Python có thể ở `Python310`, `Python311`, `Python312`, `Python313`, hoặc `Program Files/Python3X/`. Agent phải tự tìm và ghi nhớ.
 
 **Lý do:** Browser cần hiển thị trên desktop Windows, không phải trong WSL.
 
@@ -88,12 +118,28 @@ nohup google-chrome --user-data-dir="$PWD/profiles/qwen" --profile-directory=Def
 
 ### WSL
 
-**⚠️ CẢNH BÁO:** `fix-error.py` KHÔNG hoạt động từ WSL. Phải mở browser bằng Windows command:
-vi du:
+**⚠️ CẢNH BÁO:** `fix-error.py` KHÔNG chạy được từ WSL (dùng Python của WSL). Có 2 cách:
+
+**Cách 1 (Khuyến nghị): Mở Chrome Windows trực tiếp**
+```bash
+# Mở 1 worker cụ thể:
+/mnt/c/Program\ Files/Google/Chrome/Application/chrome.exe --user-data-dir="/mnt/c/Users/openclaw/.openclaw/workspace/skills/agent-super-search/profiles/chatgpt" --profile-directory=Default --no-first-run https://chatgpt.com/
+
+# Hoặc tìm Chrome path:
+ls /mnt/c/Program\ Files/Google/Chrome/Application/
+ls /mnt/c/Users/*/AppData/Local/Google/Chrome/Application/
+```
+
+**Cách 2: Qua cmd.exe (nếu Chrome có trong PATH)**
 ```bash
 /mnt/c/Windows/System32/cmd.exe /c "start chrome --user-data-dir=C:\Users\openclaw\.openclaw\workspace\skills\agent-super-search\profiles\chatgpt https://chatgpt.com/"
 ```
-note: bằng đường dẫn profile trong folder skill agent-super-search nếu như đường dẫn folder mặc định ko đúng
+
+**💡 GHI CHÚ CHO AGENT:**
+- **Lần đầu:** Tìm Chrome path bằng lệnh `ls` trên, test thành công → **GHI LẠI path vào đây**
+- **Ví dụ:** `# Máy này Chrome ở: /mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
+- **Path profile:** Luôn dùng path tuyệt đối tới `profiles/` trong folder skill
+
 ### Quy tắc fix
 
 - `all` = máy mới hoặc cần đăng nhập lại nhiều worker cùng lúc
