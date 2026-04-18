@@ -1,156 +1,139 @@
-# Agent-Search v6
+# Agent-Search v6.7
 
-Skill này dùng để hỏi nhiều web AI song song qua `manager.py` rồi gom kết quả vào một file.
+Hỏi nhiều web AI song song (ChatGPT, Gemini, DeepSeek, Qwen) qua `manager.py` rồi gom kết quả vào một file.
 
-Chỉ dùng trên máy có giao diện desktop thật:
-- hỗ trợ Windows hoặc Linux có màn hình và mở được browser
-- không hỗ trợ máy chỉ có terminal, headless server, VPS không GUI
+**Yêu cầu hệ thống:**
+- Windows hoặc Linux có GUI (màn hình thật)
+- KHÔNG hỗ trợ headless server, VPS không GUI
 
-## 🚨 QUY TẮC BẮT BUỘC - KHÔNG ĐƯỢC PHÁ VỠ
+---
 
-**TUYỆT ĐỐI KHÔNG được chạy `manager.py` với query ngắn, thiếu ngữ cảnh.**
-**LUÔN PHẢI viết lại query theo mẫu prompt (Context/Problem/Tried/Current state/Question/Goal).**
+## 🚨 QUY TẮC TỐI THƯỢNG
 
-Web AI KHÔNG đọc được lịch sử chat của user — nó chỉ thấy đúng chuỗi query bạn truyền vào.
-Nếu hỏi cụt lủn, kết quả sẽ vô dụng hoặc sai lệch.
+**TUYỆT ĐỐI KHÔNG chạy `manager.py` với query ngắn, thiếu ngữ cảnh.**
 
-**Vi phạm quy tắc này = skill vô dụng.**
+Web AI chỉ thấy đúng chuỗi query bạn truyền — không đọc được lịch sử chat.
+Hỏi cụt lủn = kết quả vô dụng.
 
-Chi tiết cách viết prompt đúng → xem section "Soạn Câu Hỏi Trước Khi Chạy" bên dưới.
-
-## Preflight Ngắn
-
-Trước khi chạy skill, agent phải check nhanh:
-1. Có phiên desktop đang mở và browser có thể hiện cửa sổ thật
-2. Có Python chạy được
-3. Có Chrome hoặc Chromium
-4. Trong thư mục skill có đủ `manager.py`, `fix-error.py`, `search_*.py`
-5. Có `profiles/` và session cũ hay chưa
-
-Nếu thiếu Python, thiếu browser, thiếu `profiles/`, hoặc đây là máy mới:
-- dừng quy trình dùng thường ngày
-- mở `readme-for-new-setup.md` và làm theo setup lần đầu
-
-Nếu worker chạy xong mà không trả được kết quả:
-- xem worker đó là lỗi trong output
-- agent chỉ được báo rõ worker nào lỗi và lỗi gì nếu nhìn ra được
-- không được tự ép user sửa ngay
-- chỉ khi user đồng ý sửa thì mới dùng `fix-error.py`
-
-## Quy Tắc Đường Dẫn
-
-Không hard-code path tuyệt đối.
-
-Code hiện tại đã tự bám theo thư mục chứa file worker:
-- `profiles/`
-- `output/`
-- `storage_state`
-
-Nghĩa là:
-- nếu copy cả folder skill sang máy khác hoặc chỗ khác, path tự đi theo folder mới
-- không cần sửa tay đường dẫn profile trong code chỉ vì đổi chỗ đặt folder
-- profile luôn nằm cùng thư mục với worker để bundle dễ mang đi
-
-## Chạy Bình Thường
-
-Windows:
-
-```bash
-python manager.py "Câu hỏi của bạn" 1
-python manager.py "Câu hỏi của bạn" 0
-```
-
-Linux:
-
-```bash
-python3 manager.py "Câu hỏi của bạn" 1
-python3 manager.py "Câu hỏi của bạn" 0
-```
-
-Ý nghĩa:
-- `1` = hiện log
-- `0` = im lặng, chỉ in kết quả cuối
-
-Login hoặc sửa Session chỉ dùng một nhóm lệnh duy nhất, khi chạy lệnh này xong Agent phải nhắc user đăng nhập khoản trên trình duyệt popup lên, sau đó tự đóng browser khi xong.:
-
-Windows (dùng fix-error.py bình thường):
-
-```bash
-python fix-error.py chatgpt
-python fix-error.py gemini
-python fix-error.py deepseek
-python fix-error.py qwen
-python fix-error.py all
-```
-
-Linux (DÙNG nohup ĐỂ TRÁNH BỊ VẰNG):
-
-⚠️ **QUAN TRỌNG:** Trên Linux, `fix-error.py` mở Chrome qua `subprocess.Popen` rồi exit ngay. Khi chạy qua exec tool, Chrome sẽ bị kill theo parent process → browser tắt ngang trước khi user kịp đăng nhập.
-**Giải pháp:** Mở thủ công bằng `nohup` (detached, không bị kill khi lệnh kết thúc):
-
-```bash
-# Mở TẤT CẢ 4 browser cùng lúc (máy mới / đăng nhập lại hết):
-nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/chatgpt --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chatgpt.com/ > /dev/null 2>&1 &
-nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/gemini --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://gemini.google.com/app > /dev/null 2>&1 &
-nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/deepseek --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.deepseek.com/ > /dev/null 2>&1 &
-nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/qwen --profile-directory=Default --no-first-run --start-maximized --disable-gpu --disable-webgl --disable-software-rasterizer https://chat.qwen.ai/ > /dev/null 2>&1 &
-```
-
-```bash
-# Mở TỪNG worker (chỉ 1 cái bị lỗi):
-nohup /usr/bin/google-chrome --user-data-dir=$HOME/.openclaw/workspace/skills/agent-Ai-search/profiles/chatgpt --profile-directory=Default --disable-gpu https://chatgpt.com/ > /dev/null 2>&1 &
-```
-
-Quy tắc:
-- không dùng menu
-- không cần nhấn Enter trong terminal
-- `all` dùng cho máy mới hoặc khi cần đăng nhập lại nhiều worker cùng lúc
-- `chatgpt|gemini|deepseek|qwen` dùng khi chỉ một worker bị lỗi login/captcha/session
-- **Linux: LUÔN dùng `nohup` + path tuyệt đối tới `--user-data-dir`**
-- `fix-error.py` chỉ hoạt động tốt trên Windows; trên Linux có thể bị văng browser
-- user đăng nhập xong thì tự đóng browser
-
-## Soạn Câu Hỏi Trước Khi Chạy
-
-Agent không được đẩy nguyên câu hỏi ngắn, mơ hồ, hoặc thiếu ngữ cảnh của user vào web AI nếu trong cuộc trò chuyện hiện tại đã có thêm bối cảnh.
-
-Nguyên tắc:
-- web worker chỉ nhìn thấy đúng chuỗi query cuối cùng, không đọc được lịch sử chat
-- vì vậy agent phải tự gom ngữ cảnh liên quan từ cuộc trò chuyện hiện tại trước khi chạy `manager.py`
-- chỉ dùng thông tin thực sự có trong chat, file, log, hoặc bối cảnh đang mở
-- không tự bịa thêm chi tiết mà user chưa nói
-- nếu user đã viết câu hỏi rất rõ rồi thì giữ nguyên ý, chỉ làm nó đầy đủ hơn nếu cần
-
-Khi câu hỏi còn thiếu ngữ cảnh, agent nên tự viết lại query theo mẫu sau và bỏ qua dòng nào không có dữ liệu:
+**MẪU QUERY BẮT BUỘC** (điền những gì có, bỏ dòng không có):
 
 ```text
-Context: [hệ thống, môi trường, stack, phiên bản, file liên quan]
+Context: [hệ thống, môi trường, stack, phiên bản]
 Problem: [vấn đề cụ thể hoặc lỗi đang gặp]
-Tried: [những gì đã thử và kết quả hiện tại]
+Tried: [những gì đã thử và kết quả]
 Current state: [đang bị kẹt ở đâu]
 Question: [điều cụ thể cần web AI trả lời]
 Goal: [kết quả mong đợi]
 ```
 
-Quy tắc dùng mẫu:
-- có gì thì điền nấy, không có thì bỏ qua hẳn dòng đó
-- luôn giữ `Question:` rõ ràng và cụ thể
-- nếu đang debug code, nên nhắc đúng file, hành vi hiện tại, hành vi mong muốn
-- nếu user hỏi quá ngắn kiểu "lỗi này là gì", "sửa sao", "vì sao không chạy", agent phải tự bổ sung phần `Context`, `Problem`, `Tried`, `Current state`
-- nếu có log lỗi, selector, model name, website name, OS, browser, phiên bản Python, agent nên đưa vào query
+**Vi phạm = skill vô dụng.**
 
-Mục tiêu:
-- để cả 4 web AI đều nhìn thấy cùng một brief đầy đủ
-- giảm câu trả lời lan man
-- tăng khả năng bám đúng vấn đề thật của user
+---
 
-## Đọc File Kết Quả Và Trả Lời User
+## 🖥️ CHẠY THEO NỀN TẢNG
 
-Sau khi `manager.py` chạy xong, agent phải đọc file tổng hợp trong `output/result_<timestamp>.txt` rồi mới trả lời user.
+### Windows
 
-Không được chỉ nói chung chung kiểu "mình đã hỏi 4 AI". Agent phải tổng hợp lại thành một câu trả lời có cấu trúc.
+```bash
+python manager.py "query của bạn" 1
+python manager.py "query của bạn" 0
+```
 
-Khung trả lời ưu tiên:
+- `1` = hiện log chi tiết
+- `0` = im lặng, chỉ in kết quả cuối
+
+### Linux
+
+```bash
+python3 manager.py "query của bạn" 1
+python3 manager.py "query của bạn" 0
+```
+
+### WSL (Windows Subsystem for Linux)
+
+**⚠️ BẮT BUỘC:** Dùng Python và Chrome của Windows, không dùng python3 của WSL.
+
+```bash
+/mnt/c/Windows/System32/cmd.exe /c "python manager.py \"query của bạn\" 1"
+```
+
+**Lý do:** Browser cần hiển thị trên desktop Windows, không phải trong WSL.
+
+---
+
+## 🔧 FIX LOGIN / CAPTCHA / SESSION
+
+Khi worker lỗi login, captcha, hoặc session expired.
+
+### Windows
+
+```bash
+python fix-error.py chatgpt    # hoặc: gemini, deepseek, qwen, all
+```
+
+### Linux
+
+**⚠️ QUAN TRỌNG:** Dùng `nohup` để browser không bị kill khi lệnh kết thúc.
+
+```bash
+# Mở 1 worker cụ thể:
+nohup google-chrome --user-data-dir="$PWD/profiles/chatgpt" --profile-directory=Default --no-first-run --start-maximized https://chatgpt.com/ > /dev/null 2>&1 &
+
+# Mở tất cả 4 workers (máy mới / đăng nhập lại hết):
+nohup google-chrome --user-data-dir="$PWD/profiles/chatgpt" --profile-directory=Default --no-first-run --start-maximized https://chatgpt.com/ > /dev/null 2>&1 &
+nohup google-chrome --user-data-dir="$PWD/profiles/gemini" --profile-directory=Default --no-first-run --start-maximized https://gemini.google.com/app > /dev/null 2>&1 &
+nohup google-chrome --user-data-dir="$PWD/profiles/deepseek" --profile-directory=Default --no-first-run --start-maximized https://chat.deepseek.com/ > /dev/null 2>&1 &
+nohup google-chrome --user-data-dir="$PWD/profiles/qwen" --profile-directory=Default --no-first-run --start-maximized https://chat.qwen.ai/ > /dev/null 2>&1 &
+```
+
+### WSL
+
+**⚠️ CẢNH BÁO:** `fix-error.py` KHÔNG hoạt động từ WSL. Phải mở browser bằng Windows command:
+vi du:
+```bash
+/mnt/c/Windows/System32/cmd.exe /c "start chrome --user-data-dir=C:\Users\openclaw\.openclaw\workspace\skills\agent-super-search\profiles\chatgpt https://chatgpt.com/"
+```
+note: bằng đường dẫn profile trong folder skill agent-super-search nếu như đường dẫn folder mặc định ko đúng
+### Quy tắc fix
+
+- `all` = máy mới hoặc cần đăng nhập lại nhiều worker cùng lúc
+- `chatgpt|gemini|deepseek|qwen` = chỉ 1 worker bị lỗi
+- User tự đăng nhập xong → tự đóng browser
+- Agent chỉ chạy fix khi user đã đồng ý
+
+---
+
+## ✅ PREFLIGHT CHECK
+
+Trước khi chạy, check nhanh:
+
+1. [ ] Desktop đang mở, browser có thể hiện cửa sổ thật
+2. [ ] Python chạy được (Windows: `python`, Linux: `python3`)
+3. [ ] Chrome hoặc Chromium cài đặt
+4. [ ] Thư mục skill có đủ: `manager.py`, `fix-error.py`, `search_*.py`
+5. [ ] Có `profiles/` folder (nếu chưa có → chạy `fix-error.py` để tạo)
+
+Nếu thiếu → dừng và setup trước (xem `readme-for-new-setup.md`).
+
+---
+
+## 📁 ĐƯỜNG DẪN VÀ PROFILE
+
+**Không hard-code path tuyệt đối trong code.**
+
+- `profiles/` → nằm cùng thư mục với worker
+- `output/` → nằm cùng thư mục với worker
+- `storage_state` → tự động tạo trong `profiles/`
+
+**Lợi ích:** Copy cả folder sang chỗ khác → path tự đi theo, không cần sửa code.
+
+---
+
+## 📖 ĐỌC KẾT QUẢ VÀ TRẢ LỜI USER
+
+Sau khi `manager.py` chạy xong, đọc file: `output/result_<timestamp>.txt`
+
+**KHÔNG được nói chung chung** "mình đã hỏi 4 AI". Phải tổng hợp theo khung:
 
 ```text
 Tóm tắt chi tiết
@@ -165,81 +148,71 @@ Link dẫn chứng (nếu có)
 - URL 1
 - URL 2
 
-Điểm chung kết quả của từng AI
+Điểm chung giữa các AI
 
 Đánh giá của Agent
+- AI nào đáng tin hơn, vì sao
+- AI nào suy đoán/thiếu căn cứ
 
-Đề xuất của Agent sau khi tổng hợp thông tin
+Đề xuất của Agent sau khi tổng hợp
 
 Kiểm tra lỗi worker
+- Worker nào thành công
+- Worker nào lỗi (login/captcha/session/timeout)
 ```
 
-Quy tắc tổng hợp:
-- `Tóm tắt chi tiết`: viết lại ý chính dễ hiểu, bám đúng câu hỏi gốc của user
-- `Quan điểm từng AI`: nêu ngắn gọn lập luận hoặc kết luận riêng của từng worker
-- `Link dẫn chứng`: nếu trong output có URL thì trích nguyên văn URL ra; nếu không có thì ghi rõ là không thấy link rõ ràng trong output
-- `Điểm chung kết quả của từng AI`: nêu phần giao nhau đáng tin nhất
-- `Đánh giá của Agent`: nói rõ AI nào đáng tin hơn, AI nào có dấu hiệu suy đoán, thiếu căn cứ, hoặc lạc đề, và vì sao
-- `Đề xuất của Agent`: đưa ra kết luận hoặc hướng hành động cuối cùng sau khi cân nhắc tất cả nguồn
-- `Kiểm tra lỗi worker`: ghi rõ worker nào thành công, worker nào lỗi login/captcha/session/timeout nếu có
+**Nếu có xung đột giữa các AI:**
+- Chỉ ra chỗ mâu thuẫn
+- Ưu tiên ý nào có dẫn chứng, lý lẽ cụ thể
+- Không giả vờ tất cả đều đồng ý
 
-Nếu có xung đột giữa các AI:
-- agent phải chỉ ra chỗ mâu thuẫn
-- ưu tiên ý nào có dẫn chứng, lý lẽ cụ thể, hoặc bám sát context của user hơn
-- không được giả vờ rằng tất cả đều đồng ý nếu thực tế đang mâu thuẫn
+**Nếu có worker lỗi:**
+- Vẫn trả lời dựa trên worker chạy được
+- Nói rõ worker nào lỗi, lỗi gì
+- Đề xuất fix, không tự chạy nếu user chưa đồng ý
 
-Nếu có worker lỗi:
-- vẫn trả lời dựa trên các worker còn chạy được
-- nhưng phải nói rõ worker nào bị lỗi
-- nếu lỗi liên quan login/captcha/session thì chỉ đề xuất phương án fix, không tự chạy fix nếu user chưa đồng ý
-- agent nên hỏi ngắn gọn kiểu: `Worker Gemini đang lỗi session. Bạn muốn sửa ngay hay để sau?`
+---
 
-## Fix Lỗi Nhanh
+## 🏗️ KIẾN TRÚC
 
-Nếu worker fail sau khi chạy:
-1. đọc summary hoặc `output/result_<timestamp>.txt`
-2. bất kỳ worker nào không trả được kết quả thì xem là worker lỗi
-3. báo rõ cho user worker nào lỗi
-4. không tự chạy fix ngay
-5. hỏi user có muốn sửa ngay hay để sau
-6. chỉ khi user chọn sửa thì mới chạy `fix-error.py`
-7. sau khi user sửa xong mới chạy lại `manager.py` nếu cần
+Mỗi file chạy độc lập:
 
-Nếu user nói:
-- "mở ChatGPT lên để kiểm tra" -> chạy `fix-error.py chatgpt`
-- "mở Gemini lên để kiểm tra" -> chạy `fix-error.py gemini`
-- "mở DeepSeek lên để kiểm tra" -> chạy `fix-error.py deepseek`
-- "mở Qwen lên để kiểm tra" -> chạy `fix-error.py qwen`
-- "mở hết lên để tôi đăng nhập lại" -> chạy `fix-error.py all`
+| File | Chức năng |
+|------|-----------|
+| `manager.py` | Điều phối 4 workers + tổng hợp kết quả |
+| `fix-error.py` | Mở browser với đúng profile để user sửa login |
+| `search_chatgpt.py` | Worker ChatGPT (tự launch, tự save session) |
+| `search_gemini.py` | Worker Gemini |
+| `search_deepseek.py` | Worker DeepSeek |
+| `search_qwen.py` | Worker Qwen |
 
-Lưu ý:
-- `fix-error.py chatgpt|gemini|deepseek|qwen|all` không cần nhập thêm trong terminal
-- `fix-error.py` chỉ là launcher, mở Chrome thật với đúng profile rồi kết thúc ngay
-- browser vẫn giữ mở để user tự đăng nhập hoặc vượt captcha
-- user chỉ cần tự đóng browser khi sửa xong
-- agent chỉ chạy các lệnh fix khi user đã đồng ý sửa
+**Lý do thiết kế:**
+- Tránh một lõi hỏng → toàn bộ worker hỏng
+- Dễ debug từng engine riêng
+- Luồng login thủ công ổn định hơn (Google OAuth, captcha)
 
-## Kiến Trúc Hiện Tại
+---
 
-Mỗi file đều tự chạy độc lập:
-- `manager.py` tự điều phối worker và tự tổng hợp kết quả
-- `fix-error.py` tự mở đúng worker setup để user sửa login/captcha
-- từng `search_*.py` tự chứa parse args, launch browser, save session, setup mode, run mode
+## 📦 NẾU DÙNG `.venv`
 
-Lý do:
-- tránh một lõi dùng chung làm hỏng toàn bộ worker
-- dễ debug từng engine riêng
-- luồng login thủ công ổn định hơn, nhất là các trang dùng Google sign-in hoặc OAuth
+Mặc định chạy bằng Python hệ thống.
 
-## Nếu Dùng `.venv`
+Nếu muốn dùng `.venv`:
+1. Tự tạo `.venv` trong thư mục skill
+2. Tự cài dependency: `pip install -r requirements.txt`
+3. Tự dùng interpreter của `.venv` cho mọi lệnh
+4. Ghi chú rõ: skill này chạy bằng `.venv`, không phải system Python
 
-Mặc định skill này viết theo kiểu chạy thẳng bằng Python của máy thật.
+---
 
-Nếu agent quyết định cài trong `.venv`:
-- agent phải tự tạo `.venv`
-- tự cài dependency trong `.venv`
-- tự dùng interpreter của `.venv` cho mọi lệnh chạy skill
-- nếu deployment này sẽ dùng lâu dài, agent phải cập nhật local workflow hoặc ghi chú rõ rằng skill này đang chạy bằng `.venv`, không phải system Python
+## ⚠️ LƯU Ý QUAN TRỌNG
 
-Chi tiết lần đầu và checklist cài đặt:
-- xem `readme-for-new-setup.md`
+1. **Application Visibility:** Browser phải hiển thị cửa sổ thật (không headless) để user theo dõi và sửa kịp thời.
+
+2. **Không tự chạy fix:** Agent chỉ chạy `fix-error.py` khi user đã đồng ý.
+
+3. **Worker fail = lỗi:** Bất kỳ worker nào không trả kết quả → xem là lỗi, báo rõ cho user.
+
+4. **Profile bundling:** Profile nằm cùng thư mục worker → dễ mang đi, không phụ thuộc path tuyệt đối.
+
+5. **WSL limitation:** Nếu chạy từ WSL, PHẢI gọi Python/Chrome của Windows. Không dùng python3 của WSL.
